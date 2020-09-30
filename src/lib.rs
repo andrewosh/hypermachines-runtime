@@ -12,8 +12,8 @@ use napi::threadsafe_function::{
   ThreadsafeFunction, ThreadsafeFunctionCallMode, ThreadsafeFunctionReleaseMode, ToJs,
 };
 use napi::{
-  sys, CallContext, Env, JsBoolean, JsBuffer, JsNumber, JsObject, JsString, JsUnknown, Module,
-  Status, Task,
+  sys, CallContext, Env, JsBoolean, JsBuffer, JsFunction, JsNumber, JsObject, JsString,
+  JsUndefined, JsUnknown, Module, Status, Task,
 };
 
 use anyhow::{Error, Result};
@@ -45,7 +45,6 @@ lazy_static! {
 // WASM-specific types
 
 type RPCExports = Vec<String>;
-type AsyncImports = Vec<String>;
 
 // Threadsafe Callback Types
 
@@ -58,7 +57,6 @@ pub struct Request {
   pub method_name: String,
   pub args: Bytes,
 }
-
 #[derive(Clone, Copy)]
 pub struct HandleRequest;
 impl ToJs for HandleRequest {
@@ -89,7 +87,6 @@ impl ToJs for HandleRequest {
 pub struct CallResponse {
   pub rsp: Bytes,
 }
-
 #[derive(Clone, Copy)]
 pub struct HandleCallResponse;
 impl ToJs for HandleCallResponse {
@@ -179,7 +176,7 @@ impl Machine {
   }
 
   fn link(machine: &'static Machine, linker: &mut Linker) -> Option<Error> {
-    linker
+    let ret = linker
       .func(
         "env",
         "machine_hostcall",
@@ -187,21 +184,22 @@ impl Machine {
           machine.async_import(caller, ptr, len)
         },
       )
-      .err()
+      .err();
+    ret
   }
 
   fn extract_name_and_args(&self, ptr: usize, len: usize) -> Result<(String, Bytes), Trap> {
     let mem = self
       .instance
       .get_memory("memory")
-      .ok_or(Trap::new("guest must export memory"))?;
+      .ok_or(Trap::new("Guest must export memory"))?;
     unsafe {
       let mut bytes = &mem.data_unchecked()[ptr..][..len];
       let name_len = bytes
         .read_u32::<LittleEndian>()
-        .map_err(|e| Trap::new("could not read method name length"))? as usize;
+        .map_err(|e| Trap::new("Could not read method name length"))? as usize;
       let name = std::str::from_utf8(&bytes[4..name_len])
-        .map_err(|e| Trap::new("could not read method name"))?
+        .map_err(|e| Trap::new("Could not read method name"))?
         .to_string();
       // TODO: Probably don't need to copy into Bytes here.
       let args = Bytes::copy_from_slice(&bytes[(4 + name_len)..]);
@@ -209,14 +207,33 @@ impl Machine {
     }
   }
 
-  fn write_response(&self, rsp: Bytes) -> Result<usize, Trap> {
+  fn extract_call_response(&self, ptr: usize) -> Result<Bytes, Trap> {
+    let mem = self
+      .instance
+      .get_memory("memory")
+      .ok_or(Trap::new("Guest must export memory"))?;
+    unsafe {
+      let mut bytes = &mem.data_unchecked()[ptr..];
+      let rsp_len = bytes
+        .read_u32::<LittleEndian>()
+        .map_err(|e| Trap::new("Could not read response length"))? as usize;
+      // TODO: Probably don't need to copy into Bytes here.
+      let offset = std::mem::size_of::<u32>();
+      let rsp = Bytes::copy_from_slice(&bytes[..rsp_len]);
+      println!("rsp_len: {}, rsp: {:?}", rsp_len, rsp);
+      self.free.get2::<u32, u32, ()>()?(ptr as u32, rsp_len as u32)?;
+      Ok(rsp)
+    }
+  }
+
+  fn write_buffer(&self, rsp: Bytes) -> Result<usize, Trap> {
     let ptr: usize = self.malloc.get1::<u32, u32>()?(rsp.len() as u32)? as usize;
     let mem = self
       .instance
       .get_memory("memory")
-      .ok_or(Trap::new("guest must export memory"))?;
+      .ok_or(Trap::new("Guest must export memory"))?;
     unsafe {
-      let bytes = &mut mem.data_unchecked_mut()[ptr..rsp.len()];
+      let bytes = &mut mem.data_unchecked_mut()[ptr..(ptr + rsp.len())];
       bytes.copy_from_slice(&rsp);
       Ok(ptr)
     }
@@ -246,20 +263,26 @@ impl Machine {
       )),
     }?;
     // 4) Write the return value into wasm memory.
-    let res_ptr = self.write_response(rsp)?;
+    let res_ptr = self.write_buffer(rsp)?;
     Ok(res_ptr as u32)
   }
 
   fn call_rpc_method(&self, method_name: String, arg: Bytes) -> Result<Bytes> {
+    println!("IN CALL_RPC_METHOD");
     let method = self
       .instance
       .get_func(&method_name)
       .ok_or(anyhow!("Invalid RPC method name"))?
-      .get1::<u32, u32>();
-    let arg_len: u32 = arg.len().try_into()?;
-    let ptr = self.malloc.get1::<u32, u32>()?(arg_len)?;
-    // TODO: Finish implementing.
-    Ok(Bytes::new())
+      .get2::<u32, u32, u32>()?;
+    let arg_len = arg.len() as u32;
+    println!("MALLOCING");
+    let ptr = self.write_buffer(arg)?;
+    println!("CALLING METHOD WITH PTR: {}", ptr);
+    let res_ptr = method(ptr as u32, arg_len)?;
+    println!("EXTRACTING RESPONSE FROM PTR: {}", res_ptr);
+    let rsp = self.extract_call_response(res_ptr as usize)?;
+    println!("SENDING RESPONSE");
+    Ok(rsp)
   }
 
   fn send_response(&self, rsp: Bytes, cb: CallbackFunc) -> Result<()> {
@@ -267,17 +290,24 @@ impl Machine {
       Ok(CallResponse { rsp }),
       ThreadsafeFunctionCallMode::Blocking,
     )
-    .map_err(|e| anyhow!("Could not send response: {}", e))
+    .map_err(|e| anyhow!("Could not send response: {}", e))?;
+    cb.release(ThreadsafeFunctionReleaseMode::Release)
+      .map_err(|e| anyhow!("Could not send response: {}", e))
   }
 
   fn send_error(&self, err: anyhow::Error, cb: CallbackFunc) -> Result<()> {
+    println!("SENDING ERROR {}", err);
     let napi_error = napi::Error::from_reason(format!("Could not send error {}", err));
     cb.call(Err(napi_error), ThreadsafeFunctionCallMode::Blocking)
+      .map_err(|e| anyhow!("Could not send error: {}", e))?;
+    cb.release(ThreadsafeFunctionReleaseMode::Release)
       .map_err(|e| anyhow!("Could not send error: {}", e))
   }
 
   fn listen(&self) -> Result<()> {
+    println!("THREAD IS LISTENING FOR MESSAGES");
     for msg in self.rx.iter() {
+      println!("GOT A MESSAGE");
       match msg {
         MachineMessage::Call(CallMessage { method, args, cb }) => {
           match self.call_rpc_method(method, args) {
@@ -287,7 +317,9 @@ impl Machine {
         }
         MachineMessage::Kill(KillMessage { cb }) => {
           // TODO: Ideally don't send an empty buffer.
-          self.send_response(Bytes::new(), cb)?
+          println!("PROCESSING KILL MSG");
+          self.send_response(Bytes::new(), cb)?;
+          break;
         }
         // Any ResponseMessages should be handled by the imported functions.
         msg => {
@@ -297,6 +329,7 @@ impl Machine {
         }
       };
     }
+    println!("EXITING LOOP");
     Ok(())
   }
 }
@@ -309,19 +342,24 @@ impl MachineHandle {
   pub fn spawn(
     id: usize,
     code: Bytes,
-    req: RequestFunc,
-    imports: AsyncImports,
     exports: RPCExports,
+    req: RequestFunc,
   ) -> Result<MachineHandle> {
     let (tx, rx) = channel::<MachineMessage>();
-    thread::spawn(move || -> Result<()> {
+    let handle = thread::spawn(move || -> Result<()> {
+      println!("PRINT IN SPAWN FROM ANOTHER THREAD");
       let (machine, mut linker) = Machine::new(id, code, rx, req, exports)?;
+      println!("CREATED MACHINE");
       let state: &'static mut Machine = Box::leak(Box::new(machine));
-      Machine::link(state, &mut linker)
-        .ok_or_else(|| anyhow!("could not link async import function"))?;
+      println!("ABOUT TO LINK MACHINE");
+      if let Some(err) = Machine::link(state, &mut linker) {
+        return Err(anyhow!("Could not link machine imports"));
+      }
       // Listen will loop on rx until the machine is killed.
       state.listen()?;
       std::mem::drop(&state);
+      println!("RELEASING REQ");
+      req.release(ThreadsafeFunctionReleaseMode::Release)?;
       Ok(())
     });
     Ok(MachineHandle { tx })
@@ -348,15 +386,9 @@ impl Dispatcher {
     }
   }
 
-  pub fn spawn(
-    &mut self,
-    code: Bytes,
-    req: RequestFunc,
-    imports: AsyncImports,
-    exports: RPCExports,
-  ) -> Result<usize> {
+  pub fn spawn(&mut self, code: Bytes, exports: RPCExports, req: RequestFunc) -> Result<usize> {
     let id = self.get_id();
-    let handle = MachineHandle::spawn(id, code, req, imports, exports)?;
+    let handle = MachineHandle::spawn(id, code, exports, req)?;
     match self.free_list.last() {
       Some(free_id) if id == *free_id => {
         self.free_list.pop();
@@ -364,6 +396,7 @@ impl Dispatcher {
       }
       _ => self.machines.push(handle),
     };
+    println!("SPAWNED THREAD WITH ID: {}", id);
     Ok(id)
   }
 
@@ -372,8 +405,21 @@ impl Dispatcher {
       .machines
       .get(id)
       .ok_or(anyhow!("Machine does not exist."))?;
+    println!("SENDING KILL MESSAGE TO {}", id);
     machine.tx.send(MachineMessage::Kill(KillMessage { cb }))?;
     self.free_list.push(id);
+    Ok(1)
+  }
+
+  pub fn call(&mut self, id: usize, method: String, args: Bytes, cb: CallbackFunc) -> Result<i32> {
+    let machine = self
+      .machines
+      .get(id)
+      .ok_or(anyhow!("Machine does not exist."))?;
+    println!("CALLING RPC METHOD: {}", method);
+    machine
+      .tx
+      .send(MachineMessage::Call(CallMessage { method, args, cb }))?;
     Ok(1)
   }
 }
@@ -381,47 +427,71 @@ impl Dispatcher {
 pub fn init(module: &mut Module) -> napi::Result<()> {
   module.create_named_method("spawn", spawn_machine)?;
   module.create_named_method("kill", kill_machine)?;
+  module.create_named_method("call", call_rpc_method)?;
   Ok(())
 }
 
 #[js_function(3)]
-pub fn spawn_machine(ctx: CallContext) -> napi::Result<JsObject> {
-  let name_arg = ctx.get::<JsString>(0)?;
-  let code_arg = ctx.get::<JsBuffer>(1)?;
-  let exports_arg = ctx.get::<JsUnknown>(2)?;
+pub fn spawn_machine(ctx: CallContext) -> napi::Result<JsNumber> {
+  let code_arg = ctx.get::<JsBuffer>(0)?;
+  let exports_arg = ctx.get::<JsUnknown>(1)?;
+  let request_handler = ctx.get::<JsFunction>(2)?;
 
-  let name = String::from(name_arg.as_str()?);
   let code = Bytes::copy_from_slice(&code_arg);
   let exports: RPCExports = ctx.env.from_js_value(exports_arg)?;
+  let req = ThreadsafeFunction::create(ctx.env, request_handler, HandleRequest, 0)?;
 
-  Err(napi::Error::from_reason(format!("Not implemented")))
-
-  /*
-  let dispatch = DISPATCH
+  let mut dispatch = DISPATCH
     .lock()
-    .map_err(|e| napi::Error::from_reason("Could not lock dispatcher"))?;
-  dispatch
-    .spawn(name, code, exports)
-    .map_err(|e| napi::Error::from_reason(format!("Could not spawn machine: {}", e)))
-    */
+    .map_err(|e| napi::Error::from_reason(format!("Could not lock dispatcher")))?;
+  let id = dispatch
+    .spawn(code, exports, req)
+    .map_err(|e| napi::Error::from_reason(format!("Could not spawn machine: {}", e)))?;
+
+  ctx.env.create_uint32(id as u32)
 }
 
-#[js_function(1)]
-pub fn kill_machine(ctx: CallContext) -> napi::Result<JsObject> {
-  let name_arg = ctx.get::<JsString>(0)?;
+#[js_function(2)]
+pub fn kill_machine(ctx: CallContext) -> napi::Result<JsUndefined> {
+  println!("IN KILL");
+  let id: u32 = ctx.get::<JsNumber>(0)?.try_into()?;
+  let cb_func = ctx.get::<JsFunction>(1)?;
+  println!("AFTER GETTING KILL ARGS");
 
-  let name = String::from(name_arg.as_str()?);
+  let cb = ThreadsafeFunction::create(ctx.env, cb_func, HandleCallResponse, 0)?;
 
-  Err(napi::Error::from_reason(format!("Not implemented")))
-
-  /*
-  let dispatch = DISPATCH
+  println!("LOCKING DISPATCH IN KILL");
+  let mut dispatch = DISPATCH
     .lock()
-    .map_err(|e| napi::Error::from_reason("Could not lock dispatcher"))?;
+    .map_err(|e| napi::Error::from_reason(format!("Could not lock dispatcher")))?;
   dispatch
-    .kill(name)
-    .map_err(|e| napi::Error::from_reason(format!("Could not kill machine: {}", e)))
-    */
+    .kill(id as usize, cb)
+    .map_err(|e| napi::Error::from_reason(format!("Could not kill machine: {}", e)))?;
+
+  println!("AFTER DISPATCH KILL");
+
+  ctx.env.get_undefined()
+}
+
+#[js_function(4)]
+pub fn call_rpc_method(ctx: CallContext) -> napi::Result<JsUndefined> {
+  let id: u32 = ctx.get::<JsNumber>(0)?.try_into()?;
+  let method: String = ctx.get::<JsString>(1)?.try_into()?;
+  let args: Bytes = Bytes::copy_from_slice(&ctx.get::<JsBuffer>(2)?);
+  let cb_func = ctx.get::<JsFunction>(3)?;
+  println!("PARSED CALL ARGS");
+
+  let cb = ThreadsafeFunction::create(ctx.env, cb_func, HandleCallResponse, 0)?;
+  println!("CREATED TSFN");
+
+  let mut dispatch = DISPATCH
+    .lock()
+    .map_err(|e| napi::Error::from_reason(format!("Could not lock dispatcher")))?;
+  dispatch
+    .call(id as usize, method, args, cb)
+    .map_err(|e| napi::Error::from_reason(format!("Could not kill machine: {}", e)))?;
+
+  ctx.env.get_undefined()
 }
 
 register_module!(example, init);
