@@ -50,6 +50,7 @@
   },
   "dependencies": {
     "@node-rs/helper": "^0.4.0",
+    "cbor": "^5.1.0",
     "nanoresource-promise": "^2.0.0",
     "why-is-node-running": "^2.2.0"
   }

@@ -4,6 +4,7 @@ use std::slice::{from_raw_parts_mut, from_raw_parts};
 use byteorder::{ByteOrder, LittleEndian};
 
 // Imported Hostcalls
+
 extern "C" {
     pub fn machine_hostcall(ptr: *mut u8, length: usize) -> *mut u8;
 }
@@ -18,7 +19,6 @@ pub extern "C" fn malloc(size: usize) -> *mut u8 {
 
 #[no_mangle]
 pub extern "C" fn free(ptr: *mut u8, size: usize) {
-    println!("IN FREE!!");
     let layout = Layout::from_size_align(size as usize, 1).unwrap();
     unsafe { dealloc(ptr, layout) }
 }

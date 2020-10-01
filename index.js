@@ -1,9 +1,14 @@
 const { loadBinding } = require('@node-rs/helper')
-const { spawn, call, kill } = loadBinding(__dirname, 'hypermachine-db', 'hypermachine-db')
 const { NanoresourcePromise: Nanoresource } = require('nanoresource-promise/emitter')
 const camelCase = require('camelcase')
 
-require('why-is-node-running')
+const {
+  spawn,
+  call,
+  kill,
+  reply_success,
+  reply_failure
+} = loadBinding(__dirname, 'hypermachine-db', 'hypermachine-db')
 
 module.exports = class Machine extends Nanoresource {
   constructor (code, opts = {}) {
@@ -13,6 +18,7 @@ module.exports = class Machine extends Nanoresource {
     // The module is only used to validate imports/exports.
     this._module = null
     this.ready = this.open.bind(this)
+    this.onHostcall = opts.onHostcall
   }
 
   // Nanoresource Methods
@@ -27,7 +33,6 @@ module.exports = class Machine extends Nanoresource {
     if (this._id === undefined) return
     return new Promise((resolve, reject) => {
       kill(this._id, err => {
-        console.log('kill finished with err:', err)
         if (err) return reject(err)
         return resolve()
       })
@@ -41,14 +46,11 @@ module.exports = class Machine extends Nanoresource {
       .exports(this._module)
       .map(({ name }) => name)
       .filter(name => name.startsWith('rpc_'))
-    console.log('EXPORT NAMES:', exportNames)
     for (const name of exportNames) {
       const method = async (args) => {
         await this.open()
         if (!Buffer.isBuffer(args)) args = Buffer.from(args)
         return new Promise((resolve, reject) => {
-          console.log('calling rpc with:', this._id, name, args)
-          console.log('args length:', args.length)
           call(this._id, name, args, (err, result) => {
             if (err) return reject(err)
             return resolve(result)
@@ -62,8 +64,16 @@ module.exports = class Machine extends Nanoresource {
 
   // The Dispatcher Hostcall
 
-  _dispatch (args, cb) {
-    console.log('DISPATCH GOT ARGS:', args)
-    return cb(null, Buffer.allocUnsafe(0))
+  async _dispatch (_, { mid: machineId, args }) {
+    if (!this.onHostcall) return reply_failure(machineId, "No hostcalls defined")
+    try {
+      let rsp = await this.onHostcall(machineId, args)
+      if (!Buffer.isBuffer(rsp)) rsp = Buffer.from(rsp)
+      reply_success(machineId, rsp)
+    } catch (err) {
+      reply_failure(machineId, err.toString())
+    }
   }
 }
+
+function noop () {}
