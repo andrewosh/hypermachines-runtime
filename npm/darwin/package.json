@@ -1,9 +1,9 @@
 {
-  "name": "hypermachine-db-darwin",
+  "name": "@hypermachines/runtime-darwin",
   "version": "0.0.1",
   "os": ["darwin"],
-  "main": "hypermachine-db.darwin.node",
-  "files": ["hypermachine-db.darwin.node"],
+  "main": "hypermachines-runtime.darwin.node",
+  "files": ["hypermachines-runtime.darwin.node"],
   "description": "Template project for writing node package with napi-rs",
   "keywords": ["napi-rs", "NAPI", "N-API", "Rust", "node-addon", "node-addon-api"],
   "license": "MIT",
@@ -15,5 +15,5 @@
     "registry": "https://registry.npmjs.org/",
     "access": "public"
   },
-  "repository": "git@github.com:andrewosh/hypermachine-db.git"
+  "repository": "git@github.com:andrewosh/hypermachines-runtime.git"
 }

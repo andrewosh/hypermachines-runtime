@@ -8,7 +8,7 @@ const {
   kill,
   reply_success,
   reply_failure
-} = loadBinding(__dirname, 'hypermachine-db', 'hypermachine-db')
+} = loadBinding(__dirname, 'hypermachines-runtime', 'hypermachines-runtime')
 
 module.exports = class Machine extends Nanoresource {
   constructor (code, opts = {}) {

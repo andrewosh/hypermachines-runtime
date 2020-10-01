@@ -1,5 +1,5 @@
 [package]
-name = "hypermachine-db"
+name = "hypermachines-runtime"
 version = "0.1.0"
 authors = ["Andrew Osheroff <andrewosh@gmail.com>", "LongYinan <lynweklm@gmail.com>"]
 edition = "2018"

@@ -1,9 +1,9 @@
 {
-  "name": "hypermachine-db-win32",
+  "name": "@hypermachines/runtime-win32",
   "version": "0.0.1",
   "os": ["win32"],
-  "main": "hypermachine-db.win32.node",
-  "files": ["hypermachine-db.win32.node"],
+  "main": "hypermachines-runtime.win32.node",
+  "files": ["hypermachines-runtime.win32.node"],
   "description": "Template project for writing node package with napi-rs",
   "keywords": ["napi-rs", "NAPI", "N-API", "Rust", "node-addon", "node-addon-api"],
   "license": "MIT",
@@ -15,5 +15,5 @@
     "registry": "https://registry.npmjs.org/",
     "access": "public"
   },
-  "repository": "git@github.com:andrewosh/hypermachine-db.git"
+  "repository": "git@github.com:andrewosh/hypermachines-runtime.git"
 }

@@ -20,7 +20,7 @@ test('can spawn and call an echo machine', async (t) => {
 })
 
 test('can spawn/call many echo machines', async t => {
-  const NUM_MACHINES = 50
+  const NUM_MACHINES = 20
   const machines = []
   for (let i = 0; i < NUM_MACHINES; i++) {
     const machine = new Machine(ECHO_WASM)
@@ -38,6 +38,7 @@ test('can spawn/call many echo machines', async t => {
 test('guest can make hostcalls', async t => {
   const machine = new Machine(HOSTCALL_ECHO_WASM, {
     async onHostcall (machineId, req) {
+      t.true(machineId)
       const decoded = await cbor.decodeFirst(req)
       const val = decoded['Append']
       t.same(val, 'hello world')

@@ -1,14 +1,15 @@
 {
-  "name": "hypermachine-db",
+  "name": "@hypermachines/runtime",
   "version": "0.0.1",
-  "description": "Build reproducible indexing pipelines with Hyperbee and WASM",
+  "description": "A native Rust WASM runtime built with Wasmtime.",
   "main": "index.js",
-  "repository": "git@github.com:andrewosh/hypermachine-db",
+  "repository": "git@github.com:andrewosh/hypermachines-runtime",
   "license": "MIT",
   "keywords": [
-    "hyperbee",
-    "database",
-    "wasm"
+    "wasmtime",
+    "rust",
+    "wasm",
+    "hypermachines"
   ],
   "files": [
     "index.js"
@@ -22,7 +23,7 @@
     "x64"
   ],
   "napi": {
-    "name": "hypermachine-db"
+    "name": "hypermachines-runtime"
   },
   "engines": {
     "node": ">= 8.9"
