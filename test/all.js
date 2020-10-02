@@ -22,6 +22,7 @@ test('can spawn and call an echo machine', async (t) => {
 test('can spawn/call many echo machines', async t => {
   const NUM_MACHINES = 20
   const machines = []
+
   for (let i = 0; i < NUM_MACHINES; i++) {
     const machine = new Machine(ECHO_WASM)
     await machine.ready()
@@ -29,16 +30,14 @@ test('can spawn/call many echo machines', async t => {
     t.same(res.toString('utf-8'), 'hello world ' + i)
     machines.push(machine)
   }
-  for (const machine of machines) {
-    await machine.close()
-  }
+
+  await Promise.all(machines.map(m => m.close()))
   t.end()
 })
 
 test('guest can make hostcalls', async t => {
   const machine = new Machine(HOSTCALL_ECHO_WASM, {
-    async onHostcall (machineId, req) {
-      t.true(machineId)
+    async onHostcall (_, req) {
       const decoded = await cbor.decodeFirst(req)
       const val = decoded['Append']
       t.same(val, 'hello world')
@@ -47,8 +46,33 @@ test('guest can make hostcalls', async t => {
   })
   await machine.ready()
   const res = await machine.echo('hello world')
-  const decoded = await cbor.decodeFirst(res)
-  t.same(decoded, 'hello world hello')
+  t.same(await cbor.decodeFirst(res), 'hello world hello')
   await machine.close()
+  t.end()
+})
+
+test('can spawn many hostcall machines', async t => {
+  const NUM_MACHINES = 20
+  const machines = []
+
+  for (let i = 0; i < NUM_MACHINES; i++) {
+    const machine = new Machine(HOSTCALL_ECHO_WASM, {
+      async onHostcall (_, req) {
+        const decoded = await cbor.decodeFirst(req)
+        const val = decoded['Append']
+        t.same(val, 'hello world ' + i)
+        return cbor.encodeOne(val + ' hello')
+      }
+    })
+    await machine.ready()
+    machines.push(machine)
+  }
+
+  for (let i = 0; i < NUM_MACHINES; i++) {
+    const machine = machines[i]
+    const decoded = await cbor.decodeFirst(await machine.echo('hello world ' + i))
+    t.same(decoded, `hello world ${i} hello`)
+  }
+  await Promise.all(machines.map(m => m.close()))
   t.end()
 })
