@@ -1,5 +1,6 @@
 const { loadBinding } = require('@node-rs/helper')
 const { NanoresourcePromise: Nanoresource } = require('nanoresource-promise/emitter')
+const mutexify = require('mutexify/promise')
 const camelCase = require('camelcase')
 
 const {
@@ -16,7 +17,8 @@ module.exports = class Machine extends Nanoresource {
     this.code = code
     this._id = null
     // The module is only used to validate imports/exports.
-    this._module = null
+    this.module = null
+    this._lock = mutexify()
     this.ready = this.open.bind(this)
     this.onHostcall = opts.onHostcall
   }
@@ -24,7 +26,7 @@ module.exports = class Machine extends Nanoresource {
   // Nanoresource Methods
 
   async _open () {
-    this._module = await WebAssembly.compile(this.code)
+    this.module = await WebAssembly.compile(this.code)
     const exportNames = this._createCallMethods()
     this._id = spawn(this.code, exportNames, this._dispatch.bind(this))
   }
@@ -43,19 +45,26 @@ module.exports = class Machine extends Nanoresource {
 
   _createCallMethods () {
     const exportNames = WebAssembly.Module
-      .exports(this._module)
+      .exports(this.module)
       .map(({ name }) => name)
       .filter(name => name.startsWith('rpc_'))
     for (const name of exportNames) {
       const method = async (args) => {
         await this.open()
+        const release = await this._lock()
+        if (!args) args = Buffer.alloc(0)
         if (!Buffer.isBuffer(args)) args = Buffer.from(args)
-        return new Promise((resolve, reject) => {
-          call(this._id, name, args, (err, result) => {
-            if (err) return reject(err)
-            return resolve(result)
+        try {
+          const res = new Promise((resolve, reject) => {
+            call(this._id, name, args, (err, result) => {
+              if (err) return reject(err)
+              return resolve(result)
+            })
           })
-        })
+          return res
+        } finally {
+          release()
+        }
       }
       this[camelCase(name.slice(4))] = method
     }

@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate serde_derive;
 
-use hypermachine::{host_request, log_u32, read_arguments, rpc_response};
+use hypermachines_sys::{host_request, log_u32, read_arguments, rpc_response};
 use serde::{Deserialize, Serialize};
 
 // Start Boilerplate
@@ -13,12 +13,12 @@ extern "C" {
 
 #[no_mangle]
 pub extern "C" fn malloc(size: usize) -> *mut u8 {
-  hypermachine::malloc(size)
+  hypermachines_sys::malloc(size)
 }
 
 #[no_mangle]
 pub extern "C" fn free(ptr: *mut u8, size: usize) {
-  hypermachine::free(ptr, size)
+  hypermachines_sys::free(ptr, size)
 }
 
 // End Boilerplate

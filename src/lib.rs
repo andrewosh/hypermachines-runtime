@@ -302,7 +302,7 @@ impl Machine {
   }
 
   fn send_error(&self, err: anyhow::Error, cb: CallbackFunc) -> Result<()> {
-    let napi_error = napi::Error::from_reason(format!("Could not send error {}", err));
+    let napi_error = napi::Error::from_reason(format!("RPC Call Error {}", err));
     cb.call(Err(napi_error), ThreadsafeFunctionCallMode::Blocking)
       .map_err(|e| anyhow!("Could not send error: {}", e))?;
     cb.release(ThreadsafeFunctionReleaseMode::Release)
