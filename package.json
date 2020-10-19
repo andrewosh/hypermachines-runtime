@@ -1,6 +1,6 @@
 {
   "name": "@hypermachines/runtime",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "A native Rust WASM runtime built with Wasmtime.",
   "main": "index.js",
   "repository": "git@github.com:andrewosh/hypermachines-runtime",
@@ -24,7 +24,9 @@
   ],
   "napi": {
     "name": "hypermachines-runtime",
-    "musl": ["linux"]
+    "musl": [
+      "linux"
+    ]
   },
   "engines": {
     "node": ">= 8.9"
