@@ -131,7 +131,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: bindings-linux-musl
-          path: package-template.linux-musl.node
+          path: hypermachines-runtime.linux-musl.node
 
   test_binding:
     name: Test bindings on ${{ matrix.os }} - node@${{ matrix.node }}
