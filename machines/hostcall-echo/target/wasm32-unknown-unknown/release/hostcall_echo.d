@@ -1,0 +1,1 @@
+/home/andrewosh/Development/@hypermachines/runtime/machines/hostcall-echo/target/wasm32-unknown-unknown/release/hostcall_echo.wasm: /home/andrewosh/Development/@hypermachines/runtime/libraries/rust/src/lib.rs /home/andrewosh/Development/@hypermachines/runtime/machines/hostcall-echo/src/lib.rs
