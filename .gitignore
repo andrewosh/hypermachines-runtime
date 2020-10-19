@@ -116,7 +116,10 @@ dist
 
 #Added by cargo
 
-/target
+target
+libraries/*/target
+machines/*/target
 Cargo.lock
 
+.build
 *.node
