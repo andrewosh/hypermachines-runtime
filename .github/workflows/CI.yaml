@@ -201,9 +201,6 @@ jobs:
         run: ls -R .
         shell: bash
 
-      - name: Run simple tests
-        run: docker run --rm -v $(pwd)/.cargo:/root/.cargo -v $(pwd):/fast-escape -w /fast-escape node:${{ matrix.node }}-alpine sh -c "node ./simple-test.js"
-
   dependabot:
     needs:
       - test_binding
