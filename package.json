@@ -23,7 +23,8 @@
     "x64"
   ],
   "napi": {
-    "name": "hypermachines-runtime"
+    "name": "hypermachines-runtime",
+    "musl": ["linux"]
   },
   "engines": {
     "node": ">= 8.9"
