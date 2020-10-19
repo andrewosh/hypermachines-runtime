@@ -94,7 +94,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: bindings-${{ env.PLATFORM_NAME }}
-          path: package-template.${{ env.PLATFORM_NAME }}.node
+          path: hypermachines-runtime.${{ env.PLATFORM_NAME }}.node
 
       - name: Clear the cargo caches
         run: |
