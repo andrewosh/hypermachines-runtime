@@ -1,15 +1,15 @@
-const { loadBinding } = require('@node-rs/helper')
 const { NanoresourcePromise: Nanoresource } = require('nanoresource-promise/emitter')
 const mutexify = require('mutexify/promise')
 const camelCase = require('camelcase')
 
+const loadBindings = require('./loader')
 const {
   spawn,
   call,
   kill,
   reply_success,
   reply_failure
-} = loadBinding(__dirname, 'hypermachines-runtime', 'hypermachines-runtime')
+} = loadBindings()
 
 module.exports = class Machine extends Nanoresource {
   constructor (code, opts = {}) {
