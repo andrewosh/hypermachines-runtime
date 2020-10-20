@@ -1,6 +1,6 @@
 {
   "name": "@hypermachines/runtime",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "A native Rust WASM runtime built with Wasmtime.",
   "main": "index.js",
   "repository": "git@github.com:andrewosh/hypermachines-runtime",
