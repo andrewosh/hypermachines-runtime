@@ -3,6 +3,8 @@ name = "hypermachines_sys"
 version = "0.1.0"
 authors = ["Andrew Osheroff <andrewosh@gmail.com>"]
 edition = "2018"
+description = "Low-level hostcall wrappers for the Hypermachines runtime"
+license = "MIT"
 
 [lib]
 crate-type = ["rlib"]
