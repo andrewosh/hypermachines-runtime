@@ -1,6 +1,6 @@
 {
   "name": "@hypermachines/runtime-win32",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "os": [
     "win32"
   ],
