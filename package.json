@@ -12,7 +12,8 @@
     "hypermachines"
   ],
   "files": [
-    "index.js"
+    "index.js",
+    "loader.js"
   ],
   "os": [
     "darwin",
