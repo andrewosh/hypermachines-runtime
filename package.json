@@ -60,7 +60,7 @@
     "nanoresource-promise": "^2.0.0"
   },
   "optionalDependencies": {
-    "@hypermachines/runtime-darwin": "^0.0.8",
+    "@hypermachines/runtime-darwin": "^0.0.9",
     "@hypermachines/runtime-linux": "^0.0.8",
     "@hypermachines/runtime-win32": "^0.0.8"
   }
