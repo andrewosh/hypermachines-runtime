@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 napi = { version = "0.5", features = ["serde-json", "libuv"] }
-napi-derive = { version = "0.5" }
+napi-derive = { version = "1.0" }
 log = "0.4.11"
 anyhow = "1.0.32"
 env_logger = "0.8.1"
